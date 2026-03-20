@@ -1,0 +1,97 @@
+[gd_scene format=3 uid="uid://4jxnnswvru5t"]
+
+[ext_resource type="Script" uid="uid://dk6rejer3ui6u" path="res://button size/control.gd" id="1_bo70b"]
+[ext_resource type="Texture2D" uid="uid://cq66eujr1ws0n" path="res://Picsart_26-03-18_20-41-15-855.png" id="2_a61mp"]
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_7upul"]
+texture = ExtResource("2_a61mp")
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_7upul"]
+bg_color = Color(1, 0, 0.12941177, 1)
+corner_detail = 15
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_8nkye"]
+bg_color = Color(1, 0, 0, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_0vuml"]
+bg_color = Color(1, 0, 0.13333334, 1)
+corner_radius_top_left = 20
+corner_radius_top_right = 20
+corner_radius_bottom_right = 20
+corner_radius_bottom_left = 20
+corner_detail = 20
+shadow_color = Color(1, 0, 0.13333334, 0.4509804)
+shadow_size = 20
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_by6ue"]
+bg_color = Color(1, 0, 0.2, 1)
+shadow_color = Color(1, 0.7384437, 0.69590276, 1)
+
+[node name="Control" type="Control" unique_id=471092945]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_bo70b")
+
+[node name="Panel" type="Panel" parent="." unique_id=210688365]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxTexture_7upul")
+
+[node name="start game" type="Button" parent="." unique_id=21326955]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.112847224
+anchor_top = 0.55246913
+anchor_right = 0.41145834
+anchor_bottom = 0.6697531
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 55
+theme_override_styles/normal = SubResource("StyleBoxFlat_7upul")
+theme_override_styles/normal_mirrored = SubResource("StyleBoxFlat_8nkye")
+text = "START GAME"
+metadata/_edit_use_anchors_ = true
+
+[node name="options" type="Button" parent="." unique_id=1725064098]
+texture_filter = 1
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.10763889
+anchor_top = 0.6851852
+anchor_right = 0.4157986
+anchor_bottom = 0.8117284
+offset_bottom = 3.0517578e-05
+grow_vertical = 2
+theme_override_font_sizes/font_size = 55
+theme_override_styles/normal = SubResource("StyleBoxFlat_0vuml")
+theme_override_styles/normal_mirrored = SubResource("StyleBoxFlat_by6ue")
+text = "OPTIONS "
+metadata/_edit_use_anchors_ = true
+
+[node name="quit" type="Button" parent="." unique_id=1143071508]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.10763889
+anchor_top = 0.8271605
+anchor_right = 0.4201389
+anchor_bottom = 0.9444444
+grow_horizontal = 0
+grow_vertical = 2
+theme_override_font_sizes/font_size = 55
+theme_override_styles/normal = SubResource("StyleBoxFlat_0vuml")
+theme_override_styles/normal_mirrored = SubResource("StyleBoxFlat_by6ue")
+keep_pressed_outside = true
+text = "QUIT GAME"
+metadata/_edit_use_anchors_ = true
+
+[connection signal="pressed" from="start game" to="." method="_on_start_game_pressed"]
+[connection signal="pressed" from="options" to="." method="_on_options_pressed"]
+[connection signal="pressed" from="quit" to="." method="_on_quit_pressed"]
