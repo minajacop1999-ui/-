@@ -1,0 +1,705 @@
+[gd_scene format=3 uid="uid://cfero7dd2t7ib"]
+
+[ext_resource type="Texture2D" uid="uid://b16ivvwpdp1v1" path="res://assets enemy/Knight 2D Pixel Art/Sprites/without_outline/IDLE.png" id="1_7k104"]
+[ext_resource type="Texture2D" uid="uid://c4550xxqw0qti" path="res://assets enemy/Knight 2D Pixel Art/Sprites/without_outline/ATTACK 1.png" id="1_hb8ge"]
+[ext_resource type="Texture2D" uid="uid://b360rl5iuhurq" path="res://assets enemy/Knight 2D Pixel Art/Sprites/without_outline/ATTACK 2.png" id="2_e1ltt"]
+[ext_resource type="Texture2D" uid="uid://dfutgvp5jvein" path="res://assets enemy/Knight 2D Pixel Art/Sprites/without_outline/ATTACK 3.png" id="3_dxifv"]
+[ext_resource type="Texture2D" uid="uid://d1vfxrbsadkom" path="res://assets enemy/Knight 2D Pixel Art/Sprites/without_outline/DEATH.png" id="4_pwjut"]
+[ext_resource type="Texture2D" uid="uid://48ljol76y3tt" path="res://assets enemy/Knight 2D Pixel Art/Sprites/without_outline/HURT.png" id="5_n0g06"]
+[ext_resource type="Texture2D" uid="uid://cm7licjqskym" path="res://assets enemy/Knight 2D Pixel Art/Sprites/without_outline/JUMP.png" id="7_ar8e5"]
+[ext_resource type="Texture2D" uid="uid://qjhe43h03hpc" path="res://assets enemy/Knight 2D Pixel Art/Sprites/without_outline/RUN.png" id="8_doop2"]
+
+[sub_resource type="GDScript" id="GDScript_4gyqm"]
+script/source = "extends CharacterBody2D
+
+# ============== إعدادات العدو ==============
+@export var enemy_name: String = \"Goblin\"
+@export var move_speed: float = 150.0
+@export var attack_range: float = 40.0
+@export var attack_cooldown: float = 1.2
+@export var max_health: int = 100
+@export var damage: int = 20
+@export var experience_reward: int = 50
+
+# ============== مراجع العقد ==============
+@onready var animator: AnimatedSprite2D = $AnimatedSprite2D
+@onready var collision_shape: CollisionShape2D = $CollisionShape2D
+@onready var attack_timer: Timer = $AttackTimer
+@onready var hurt_timer: Timer = $HurtTimer
+@onready var health_bar: ProgressBar = $HealthBar
+
+# ============== متغيرات الحالة ==============
+var current_health: int
+var is_attacking: bool = false
+var is_dead: bool = false
+var is_hurt: bool = false
+var can_attack: bool = true
+var current_attack: String = \"attack1\"
+var player: Node2D = null
+
+# ============== إشارات ==============
+signal enemy_died(position, experience)
+signal player_damaged(damage_amount)
+
+# ============== دوال التهيئة ==============
+func _ready():
+	current_health = max_health
+	_setup_timers()
+	_find_player()
+	_update_health_bar()
+	
+	add_to_group(\"enemies\")
+	_update_animation(\"idle\")
+
+func _setup_timers():
+	attack_timer.wait_time = attack_cooldown
+	attack_timer.one_shot = true
+	attack_timer.timeout.connect(_on_attack_timer_timeout)
+	
+	hurt_timer.wait_time = 0.2
+	hurt_timer.one_shot = true
+	hurt_timer.timeout.connect(_on_hurt_timer_timeout)
+
+func _find_player():
+	player = get_tree().get_first_node_in_group(\"player\")
+
+func _update_health_bar():
+	if health_bar:
+		health_bar.value = float(current_health) / max_health * 100
+		var health_percentage = float(current_health) / max_health
+		if health_percentage <= 0.3:
+			health_bar.modulate = Color.RED
+		elif health_percentage <= 0.6:
+			health_bar.modulate = Color.YELLOW
+		else:
+			health_bar.modulate = Color.GREEN
+
+# ============== دوال الحركة - يتحرك تلقائياً للاعب ==============
+func _physics_process(delta):
+	# إذا كان ميتاً أو يهاجم أو متأذي، لا يتحرك
+	if is_dead or is_attacking or is_hurt:
+		velocity = Vector2.ZERO
+		move_and_slide()
+		return
+	
+	# البحث عن اللاعب إذا لم يكن موجوداً
+	if player == null:
+		_find_player()
+		if player == null:
+			# إذا لم يوجد لاعب، يقف في مكانه
+			velocity = Vector2.ZERO
+			move_and_slide()
+			_update_animation(\"idle\")
+			return
+	
+	# حساب المسافة للاعب
+	var distance_to_player = global_position.distance_to(player.global_position)
+	
+	# دائماً يتحرك نحو اللاعب بغض النظر عن المسافة
+	_move_towards_player()
+	
+	# التحقق من إمكانية الهجوم
+	if distance_to_player <= attack_range and can_attack and not is_attacking:
+		_attack()
+
+func _move_towards_player():
+	if player == null:
+		return
+	
+	# حساب اتجاه اللاعب
+	var direction = global_position.direction_to(player.global_position)
+	
+	# التحرك نحو اللاعب
+	velocity = direction * move_speed
+	move_and_slide()
+	
+	# قلب السبرايت حسب الاتجاه
+	_flip_sprite(direction.x)
+	
+	# تشغيل انيميشن الجري
+	_update_animation(\"run\")
+
+func _flip_sprite(direction_x: float):
+	if direction_x != 0 and animator:
+		animator.flip_h = direction_x < 0
+
+# ============== دوال الهجوم ==============
+func _attack():
+	if not can_attack or is_attacking or is_dead:
+		return
+	
+	is_attacking = true
+	can_attack = false
+	velocity = Vector2.ZERO
+	
+	# اختيار هجوم عشوائي
+	var random_attack = randi() % 3 + 1
+	current_attack = \"attack\" + str(random_attack)
+	
+	# تشغيل انيميشن الهجوم
+	_update_animation(current_attack)
+	
+	# انتظار نصف ثانية لتطبيق الضرر
+	await get_tree().create_timer(0.3).timeout
+	
+	# تطبيق الضرر على اللاعب
+	_apply_damage_to_player()
+	
+	# انتظار انتهاء انيميشن الهجوم
+	await get_tree().create_timer(0.4).timeout
+	
+	is_attacking = false
+	attack_timer.start()
+
+func _apply_damage_to_player():
+	if player == null:
+		return
+	
+	# التحقق من أن اللاعب في نطاق الهجوم
+	var distance_to_player = global_position.distance_to(player.global_position)
+	
+	if distance_to_player <= attack_range:
+		if player.has_method(\"take_damage\"):
+			player.take_damage(damage, self)
+			player_damaged.emit(damage)
+			
+			# تأثير عند الضرب
+			_create_hit_effect()
+
+func _create_hit_effect():
+	modulate = Color.RED
+	await get_tree().create_timer(0.1).timeout
+	modulate = Color.WHITE
+
+# ============== دوال استقبال الضرر ==============
+func take_damage(amount: int, damage_source: Node2D = null):
+	if is_dead or is_hurt:
+		return
+	
+	current_health -= amount
+	_update_health_bar()
+	
+	is_hurt = true
+	_update_animation(\"hurt\")
+	
+	# تأثير التراجع
+	if damage_source:
+		var knockback_direction = global_position.direction_to(damage_source.global_position) * -1
+		velocity = knockback_direction * 200
+		velocity.y = -100
+		move_and_slide()
+	
+	# تأثير الوميض
+	_flash_red()
+	
+	hurt_timer.start()
+	
+	if current_health <= 0:
+		_die()
+
+func _flash_red():
+	var original_modulate = modulate
+	modulate = Color.RED
+	await get_tree().create_timer(0.1).timeout
+	modulate = original_modulate
+
+# ============== دوال الموت ==============
+func _die():
+	is_dead = true
+	can_attack = false
+	
+	# تعطيل التصادم
+	if collision_shape:
+		collision_shape.disabled = true
+	
+	# إخفاء شريط الصحة
+	if health_bar:
+		health_bar.visible = false
+	
+	# تشغيل انيميشن الموت
+	_update_animation(\"death\")
+	
+	# إرسال إشارة الموت
+	enemy_died.emit(global_position, experience_reward)
+	
+	# انتظار انتهاء الانيميشن ثم الحذف
+	await get_tree().create_timer(1.0).timeout
+	queue_free()
+
+# ============== دوال الانيميشن ==============
+func _update_animation(animation_name: String):
+	if is_dead or not animator:
+		return
+	
+	var animations = [\"idle\", \"run\", \"jump\", \"hurt\", \"death\", \"attack1\", \"attack2\", \"attack3\"]
+	
+	if animation_name in animations:
+		if animator.sprite_frames.has_animation(animation_name):
+			animator.play(animation_name)
+		else:
+			# استخدم انيميشن بديل إذا لم يكن موجوداً
+			match animation_name:
+				\"attack1\", \"attack2\", \"attack3\":
+					if animator.sprite_frames.has_animation(\"attack1\"):
+						animator.play(\"attack1\")
+				\"death\":
+					if animator.sprite_frames.has_animation(\"die\"):
+						animator.play(\"die\")
+				_:
+					if animator.sprite_frames.has_animation(\"idle\"):
+						animator.play(\"idle\")
+
+func _on_animation_finished():
+	if not animator:
+		return
+	
+	var finished = animator.animation
+	
+	if finished == \"attack1\" or finished == \"attack2\" or finished == \"attack3\":
+		pass
+	elif finished == \"hurt\":
+		if not is_dead:
+			is_hurt = false
+			_update_animation(\"idle\")
+	elif finished == \"death\":
+		pass
+
+# ============== دوال المؤقتات ==============
+func _on_attack_timer_timeout():
+	can_attack = true
+
+func _on_hurt_timer_timeout():
+	is_hurt = false
+	if not is_dead and not is_attacking:
+		_update_animation(\"idle\")
+"
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_qi2p4"]
+size = Vector2(83, 154.5)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_5hcft"]
+atlas = ExtResource("1_hb8ge")
+region = Rect2(0, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_nnovl"]
+atlas = ExtResource("1_hb8ge")
+region = Rect2(96, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_jmwgi"]
+atlas = ExtResource("1_hb8ge")
+region = Rect2(192, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_g2u8i"]
+atlas = ExtResource("1_hb8ge")
+region = Rect2(288, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_otto8"]
+atlas = ExtResource("1_hb8ge")
+region = Rect2(384, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_8q82m"]
+atlas = ExtResource("1_hb8ge")
+region = Rect2(480, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_epc7x"]
+atlas = ExtResource("2_e1ltt")
+region = Rect2(0, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_o7rgc"]
+atlas = ExtResource("2_e1ltt")
+region = Rect2(96, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_kdav3"]
+atlas = ExtResource("2_e1ltt")
+region = Rect2(192, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_jpbtr"]
+atlas = ExtResource("2_e1ltt")
+region = Rect2(288, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_qgdfx"]
+atlas = ExtResource("2_e1ltt")
+region = Rect2(384, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_qku5p"]
+atlas = ExtResource("3_dxifv")
+region = Rect2(0, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_l1fjw"]
+atlas = ExtResource("3_dxifv")
+region = Rect2(96, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_b5wqg"]
+atlas = ExtResource("3_dxifv")
+region = Rect2(192, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_hgro5"]
+atlas = ExtResource("3_dxifv")
+region = Rect2(288, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_18rq2"]
+atlas = ExtResource("3_dxifv")
+region = Rect2(384, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ccdwq"]
+atlas = ExtResource("3_dxifv")
+region = Rect2(480, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_0jgdh"]
+atlas = ExtResource("4_pwjut")
+region = Rect2(0, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_6wg26"]
+atlas = ExtResource("4_pwjut")
+region = Rect2(96, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_qskgw"]
+atlas = ExtResource("4_pwjut")
+region = Rect2(192, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_g3onx"]
+atlas = ExtResource("4_pwjut")
+region = Rect2(288, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_o707m"]
+atlas = ExtResource("4_pwjut")
+region = Rect2(384, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_difxq"]
+atlas = ExtResource("4_pwjut")
+region = Rect2(480, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_5tv8x"]
+atlas = ExtResource("4_pwjut")
+region = Rect2(576, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_jnl6c"]
+atlas = ExtResource("4_pwjut")
+region = Rect2(672, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_lv0vf"]
+atlas = ExtResource("4_pwjut")
+region = Rect2(768, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_6fu1e"]
+atlas = ExtResource("4_pwjut")
+region = Rect2(864, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_p80fi"]
+atlas = ExtResource("4_pwjut")
+region = Rect2(960, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ju3h7"]
+atlas = ExtResource("4_pwjut")
+region = Rect2(1056, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_p3p7n"]
+atlas = ExtResource("5_n0g06")
+region = Rect2(0, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_8ehh3"]
+atlas = ExtResource("5_n0g06")
+region = Rect2(96, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_8nwx4"]
+atlas = ExtResource("5_n0g06")
+region = Rect2(192, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_fq8ad"]
+atlas = ExtResource("5_n0g06")
+region = Rect2(288, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_iifgy"]
+atlas = ExtResource("1_7k104")
+region = Rect2(0, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_epg4t"]
+atlas = ExtResource("1_7k104")
+region = Rect2(96, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_3yqyl"]
+atlas = ExtResource("1_7k104")
+region = Rect2(192, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_wujgv"]
+atlas = ExtResource("1_7k104")
+region = Rect2(288, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_hb8ge"]
+atlas = ExtResource("1_7k104")
+region = Rect2(384, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_e1ltt"]
+atlas = ExtResource("1_7k104")
+region = Rect2(480, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_dxifv"]
+atlas = ExtResource("1_7k104")
+region = Rect2(576, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_j1pr3"]
+atlas = ExtResource("7_ar8e5")
+region = Rect2(0, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_xxnat"]
+atlas = ExtResource("7_ar8e5")
+region = Rect2(96, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_nettl"]
+atlas = ExtResource("7_ar8e5")
+region = Rect2(192, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_20yfm"]
+atlas = ExtResource("7_ar8e5")
+region = Rect2(288, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_q6aid"]
+atlas = ExtResource("7_ar8e5")
+region = Rect2(384, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_t62om"]
+atlas = ExtResource("8_doop2")
+region = Rect2(0, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_di3s7"]
+atlas = ExtResource("8_doop2")
+region = Rect2(96, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_p8kvh"]
+atlas = ExtResource("8_doop2")
+region = Rect2(192, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_oj7qy"]
+atlas = ExtResource("8_doop2")
+region = Rect2(288, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_4qilb"]
+atlas = ExtResource("8_doop2")
+region = Rect2(384, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_uhdqh"]
+atlas = ExtResource("8_doop2")
+region = Rect2(480, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ccbbw"]
+atlas = ExtResource("8_doop2")
+region = Rect2(576, 0, 96, 84)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_m6srv"]
+atlas = ExtResource("8_doop2")
+region = Rect2(672, 0, 96, 84)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_pwjut"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_5hcft")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_nnovl")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_jmwgi")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_g2u8i")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_otto8")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_8q82m")
+}],
+"loop": true,
+"name": &"attack1",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_epc7x")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_o7rgc")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_kdav3")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_jpbtr")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_qgdfx")
+}],
+"loop": true,
+"name": &"attack2",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_qku5p")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_l1fjw")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_b5wqg")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_hgro5")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_18rq2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ccdwq")
+}],
+"loop": true,
+"name": &"attack3",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_0jgdh")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_6wg26")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_qskgw")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_g3onx")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_o707m")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_difxq")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_5tv8x")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_jnl6c")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_lv0vf")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_6fu1e")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_p80fi")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ju3h7")
+}],
+"loop": true,
+"name": &"death",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_p3p7n")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_8ehh3")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_8nwx4")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_fq8ad")
+}],
+"loop": true,
+"name": &"hurt",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_iifgy")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_epg4t")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_3yqyl")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_wujgv")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_hb8ge")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_e1ltt")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_dxifv")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_j1pr3")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_xxnat")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_nettl")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_20yfm")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_q6aid")
+}],
+"loop": true,
+"name": &"jump",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_t62om")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_di3s7")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_p8kvh")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_oj7qy")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_4qilb")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_uhdqh")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ccbbw")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_m6srv")
+}],
+"loop": true,
+"name": &"run",
+"speed": 10.0
+}]
+
+[node name="enemy" type="CharacterBody2D" unique_id=1262571580]
+script = SubResource("GDScript_4gyqm")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1499487397]
+position = Vector2(122.5, 546.75)
+shape = SubResource("RectangleShape2D_qi2p4")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=170856485]
+position = Vector2(123, 541)
+scale = Vector2(3.1979167, 3.3452382)
+sprite_frames = SubResource("SpriteFrames_pwjut")
+animation = &"attack1"
